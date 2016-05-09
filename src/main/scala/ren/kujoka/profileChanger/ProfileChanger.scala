@@ -1,4 +1,4 @@
-package profileChanger
+package ren.kujoka.profileChanger
 
 import twitter4j._
 import twitter4j.api._
