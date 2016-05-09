@@ -1,52 +1,37 @@
-package ren.kujoka.profileChanger
+package profileChanger
 
 import twitter4j._
 import twitter4j.api._
-import scala.tools.reflect.ToolBox
-import scala.reflect.runtime.currentMirror
 import java.io.File
-
-trait MyConfig {
-  val account:String
-  case class ChangeList(
-    name:String,
-    url:String,
-    bio:String,
-    geo:String,
-    icon:Seq[File]
-  )
-  val changeLists:Map[String, ChangeList]
-}
+import com.typesafe.config._
 
 object ProfileChanger {
   def main(args: Array[String]) = {
-    val toolbox = currentMirror.mkToolBox()
-    val config: MyConfig = toolbox.eval(toolbox.parse(scala.io.Source.fromFile("config/MyConfig.scala").mkString)).asInstanceOf[MyConfig]
+    val config = ConfigFactory.load
     val twitter: Twitter = new TwitterFactory().getInstance()
     var user: User = twitter.verifyCredentials()
     val listener: UserStreamListener = new UserStreamListener {
       def onStatus(status: Status) = {
         if (status.getUser() == user) {
           val tweet = status.getText().split(" ")
-          if (tweet.length == 3 && tweet(0) == config.account && tweet(2).length == 1) {
+          if (tweet.length == 3 && tweet(0) == "@your id" && tweet(2).length == 1) {
             val num = tweet(2).toInt
             user = twitter.verifyCredentials()
             val footer = user.getDescription().dropWhile(_ != '★')
             try {
-              if (config.changeLists.contains(tweet(1))) {
-                twitter.destroyStatus(status.getId)
-                twitter.updateProfile(
-                  config.changeLists(tweet(1)).name,
-                  config.changeLists(tweet(1)).url,
-                  config.changeLists(tweet(1)).geo,
-                  config.changeLists(tweet(1)).bio + footer
-                )
-                twitter.updateProfileImage(
-                  config.changeLists(tweet(1)).icon(num)
-                )
-              }
+              val changeLists = config.getConfig(tweet(1))
+              twitter.destroyStatus(status.getId)
+              twitter.updateProfile(
+                changeLists.getString("name"),
+                changeLists.getString("url"),
+                changeLists.getString("geo"),
+                changeLists.getString("bio") + footer
+              )
+              twitter.updateProfileImage(
+                new File("icon/" + changeLists.getList("icon").get(num).unwrapped)
+              )
             } catch {
-              case e: Exception => println("更新に失敗しました")
+              case e: Exception => e.printStackTrace()
             }
           }            
         }
